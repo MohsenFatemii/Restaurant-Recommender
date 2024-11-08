@@ -1,96 +1,80 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Score Calculator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 1400px;
+        #map {
+            height: 400px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
         .coefficients {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 10px;
-            margin-bottom: 20px;
         }
         .coefficient {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin-bottom: 5px;
-        }
-        input {
-            padding: 5px;
-            margin-bottom: 10px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
+            padding: 10px;
+            background: #f5f5f5;
             border-radius: 4px;
-            cursor: pointer;
-            margin-bottom: 20px;
-            margin-right: 10px;
         }
-        button:hover {
-            background-color: #45a049;
-        }
-        .data-source {
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        .data-source input {
-            flex: 1;
-            min-width: 300px;
+        .results {
+            overflow-x: auto;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
-            font-size: 14px;
         }
         th, td {
-            border: 1px solid #ddd;
             padding: 8px;
+            border: 1px solid #ddd;
             text-align: left;
         }
         th {
-            background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-            z-index: 1;
+            background-color: #f5f5f5;
         }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
+        .location-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
         }
-        .results {
-            margin-top: 20px;
-            overflow-x: auto;
-            max-height: 600px;
-            overflow-y: auto;
+        .buttons {
+            margin: 20px 0;
         }
-        #loadingMessage {
-            display: none;
-            color: #666;
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .file-input {
             margin: 10px 0;
         }
-        .address {
-            max-width: 300px;
-        }
-        .title {
-            min-width: 150px;
-        }
-        .numeric {
-            text-align: right;
+        #csv-url {
+            width: 100%;
+            max-width: 500px;
+            padding: 8px;
+            margin-bottom: 10px;
         }
         .error {
             color: red;
@@ -99,226 +83,495 @@
     </style>
 </head>
 <body>
-    <h1>Restaurant Score Calculator</h1>
-    
-    <div class="data-source">
-        <input type="text" id="csvUrl" placeholder="Enter CSV URL" value="https://raw.githubusercontent.com/MohsenFatemii/Restaurant-Recommender/main/restaurants.csv">
-        <button onclick="loadCSV()">Load Data</button>
-        <div id="loadingMessage">Loading data...</div>
+    <div class="container">
+        <h1>Restaurant Score Calculator</h1>
+
+        <div class="section">
+            <h2>Select Your Location</h2>
+            <div id="map"></div>
+            <div class="location-info">
+                <p>Selected Location: <span id="selected-location">None</span></p>
+            </div>
+        </div>
+
+        <div class="section" id="data-source">
+            <h2>Load Data</h2>
+            <div class="file-input">
+                <input type="text" id="csv-url" placeholder="Enter CSV file URL" value="https://raw.githubusercontent.com/MohsenFatemii/Restaurant-Recommender/refs/heads/main/restaurants.csv">
+                <button onclick="loadCSV()">Load CSV</button>
+            </div>
+            <div id="loadingMessage"></div>
+            <div id="errorMessage" class="error"></div>
+        </div>
+
+        <div class="section">
+            <h2>Coefficients</h2>
+            <div class="coefficients">
+                <div class="coefficient">
+                    <label>Weight of Price:</label>
+                    <input type="number" id="price-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Weight of Rating of Food:</label>
+                    <input type="number" id="food-rating-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Weight of Like/Dislike:</label>
+                    <input type="number" id="like-dislike-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Weight of Vendor's Rating:</label>
+                    <input type="number" id="vendor-rating-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Weight of Number of votes:</label>
+                    <input type="number" id="votes-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Closeness Weight:</label>
+                    <input type="number" id="closeness-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Score 5-1 Weight:</label>
+                    <input type="number" id="score-weight" value="0" step="0.1" min="0">
+                </div>
+                <div class="coefficient">
+                    <label>Num Foods Weight:</label>
+                    <input type="number" id="foods-weight" value="0" step="0.1" min="0">
+                </div>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button onclick="calculateScores()">Calculate Scores</button>
+            <button onclick="exportResults()">Export Results</button>
+        </div>
+
+        <div class="section">
+            <h2>Results</h2>
+            <div class="results">
+                <table id="results-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Score</th>
+                            <th>Restaurant Name</th>
+                            <th>Address</th>
+                            <th>Location</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <div class="coefficients">
-        <div class="coefficient">
-            <label for="mean_price">Weight of Price:</label>
-            <input type="number" id="mean_price" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="mean_rating_food">Weight of Rating of Food:</label>
-            <input type="number" id="mean_rating_food" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="mean_like_dislike">Weight of Like/Dislike of foods:</label>
-            <input type="number" id="mean_like_dislike" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="mean_rating_vendor">Weight of Vendor's Rating:</label>
-            <input type="number" id="mean_rating_vendor" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="num_rating_vendor">Weight of Number of votes:</label>
-            <input type="number" id="num_rating_vendor" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="closeness">Closeness Weight:</label>
-            <input type="number" id="closeness" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="score_5_1">Score 5-1 Weight:</label>
-            <input type="number" id="score_5_1" value="0.0" step="0.05">
-        </div>
-        <div class="coefficient">
-            <label for="num_foods">Num Foods Weight:</label>
-            <input type="number" id="num_foods" value="0.0" step="0.05">
-        </div>
-    </div>
-
-    <button onclick="calculateScores()">Calculate Scores</button>
-    <button onclick="exportToCSV()">Export Results</button>
-
-    <div class="results">
-        <table id="resultsTable">
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Score</th>
-                    <th>Restaurant Name</th>
-                    <th>Address</th>
-                    <th>Price</th>
-                    <th>Rating (Food)</th>
-                    <th>Like/Dislike</th>
-                    <th>Rating (Vendor)</th>
-                    <th>Comment Count</th>
-                    <th>Distance</th>
-                    <th>Score 5-1</th>
-                    <th>Food Count</th>
-                    <th>Location</th>
-                    <th>Link</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script>
+        let selectedLat = null;
+        let selectedLon = null;
+        let map;
+        let marker;
         let restaurantData = [];
 
-        async function loadCSV() {
-            const urlInput = document.getElementById('csvUrl');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const url = urlInput.value.trim();
-            
-            if (!url) {
-                alert('Please enter a valid CSV URL');
-                return;
-            }
+        // Initialize the map
+        function initMap() {
+            map = L.map('map').setView([36.293944, 59.610022], 13); // Default to NYC coordinates
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
 
-            loadingMessage.style.display = 'block';
-            
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Failed to fetch CSV file');
-                const csvText = await response.text();
-                
-                Papa.parse(csvText, {
-                    header: true,
-                    dynamicTyping: true,
-                    complete: function(results) {
-                        restaurantData = results.data.filter(row => row.code);
-                        loadingMessage.style.display = 'none';
-                        console.log('Data loaded:', restaurantData.length, 'rows');
-                        calculateScores();
-                    },
-                    error: function(error) {
-                        console.error('Error:', error);
-                        loadingMessage.style.display = 'none';
-                        alert('Error parsing CSV file');
-                    }
-                });
-            } catch (error) {
-                console.error('Error:', error);
-                loadingMessage.style.display = 'none';
-                alert('Error loading CSV file: ' + error.message);
-            }
-        }
-
-        function calculateScores() {
-            if (restaurantData.length === 0) {
-                alert('Please load data first');
-                return;
-            }
-
-            const coefficients = {
-                mean_price: parseFloat(document.getElementById('mean_price').value),
-                mean_rating_food: parseFloat(document.getElementById('mean_rating_food').value),
-                mean_like_dislike: parseFloat(document.getElementById('mean_like_dislike').value),
-                mean_rating_vendor: parseFloat(document.getElementById('mean_rating_vendor').value),
-                num_rating_vendor: parseFloat(document.getElementById('num_rating_vendor').value),
-                closeness: parseFloat(document.getElementById('closeness').value),
-                score_5_1: parseFloat(document.getElementById('score_5_1').value),
-                num_foods: parseFloat(document.getElementById('num_foods').value)
-            };
-
-            const results = restaurantData.map(restaurant => ({
-                ...restaurant,
-                score: 
-                    coefficients.mean_price * restaurant.price +
-                    coefficients.mean_rating_food * restaurant.rating_x +
-                    coefficients.mean_like_dislike * restaurant['like-dislike'] +
-                    coefficients.mean_rating_vendor * restaurant.rating_y +
-                    coefficients.num_rating_vendor * restaurant.commentCount_y +
-                    coefficients.closeness * restaurant.distance +
-                    coefficients.score_5_1 * restaurant['score5-1'] +
-                    coefficients.num_foods * restaurant.count
-            }));
-
-            results.sort((a, b) => b.score - a.score);
-
-            const tbody = document.querySelector('#resultsTable tbody');
-            tbody.innerHTML = '';
-
-            results.slice(0, 100).forEach((restaurant, index) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="numeric">${index + 1}</td>
-                    <td class="numeric">${restaurant.score.toFixed(4)}</td>
-                    <td class="title">${restaurant.title_y}</td>
-                    <td class="address">${restaurant.address}</td>
-                    <td class="numeric">${restaurant.price.toFixed(4)}</td>
-                    <td class="numeric">${restaurant.rating_x.toFixed(4)}</td>
-                    <td class="numeric">${restaurant['like-dislike'].toFixed(4)}</td>
-                    <td class="numeric">${restaurant.rating_y.toFixed(4)}</td>
-                    <td class="numeric">${restaurant.commentCount_y.toFixed(4)}</td>
-                    <td class="numeric">${restaurant.distance.toFixed(4)}</td>
-                    <td class="numeric">${restaurant['score5-1'].toFixed(4)}</td>
-                    <td class="numeric">${restaurant.count}</td>
-                    <td class="numeric">${restaurant.lat}, ${restaurant.lon}</td>
-                    <td><a href="https://snappfood.ir/restaurant/menu/${restaurant.code}/" target="_blank">Menu</a></td>
-                `;
-                tbody.appendChild(row);
+            map.on('click', function(e) {
+                selectedLat = e.latlng.lat;
+                selectedLon = e.latlng.lng;
+                updateMarker(e.latlng);
+                updateLocationDisplay();
             });
         }
 
-        function exportToCSV() {
-            if (restaurantData.length === 0) {
-                alert('Please load and calculate scores first');
+        function updateMarker(latlng) {
+            if (marker) {
+                marker.setLatLng(latlng);
+            } else {
+                marker = L.marker(latlng).addTo(map);
+            }
+        }
+
+        function updateLocationDisplay() {
+            document.getElementById('selected-location').textContent = 
+                `Latitude: ${selectedLat.toFixed(4)}, Longitude: ${selectedLon.toFixed(4)}`;
+        }
+
+        async function loadCSV() {
+            const urlInput = document.getElementById('csv-url');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            const url = urlInput.value.trim();
+            if (!url) {
+                errorMessage.textContent = 'Please enter a CSV file URL';
                 return;
             }
 
-            const coefficients = {
-                mean_price: parseFloat(document.getElementById('mean_price').value),
-                mean_rating_food: parseFloat(document.getElementById('mean_rating_food').value),
-                mean_like_dislike: parseFloat(document.getElementById('mean_like_dislike').value),
-                mean_rating_vendor: parseFloat(document.getElementById('mean_rating_vendor').value),
-                num_rating_vendor: parseFloat(document.getElementById('num_rating_vendor').value),
-                closeness: parseFloat(document.getElementById('closeness').value),
-                score_5_1: parseFloat(document.getElementById('score_5_1').value),
-                num_foods: parseFloat(document.getElementById('num_foods').value)
+            loadingMessage.textContent = 'Loading data...';
+            errorMessage.textContent = '';
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to fetch CSV file');
+                
+                const csvText = await response.text();
+                
+                // Debug: Log the first few lines of the CSV
+                console.log("First 500 characters of CSV:", csvText.substring(0, 500));
+
+                Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    delimiter: ',', // Explicitly set delimiter
+                    newline: '\n',  // Explicitly set newline
+                    dynamicTyping: true,
+                    transformHeader: function(header) {
+                        // Normalize header names
+                        return header.toLowerCase()
+                            .replace(/[^a-z0-9]/g, '') // Remove special characters
+                            .trim();
+                    },
+                    complete: function(results) {
+                        console.log("Parsing results:", results);
+                        
+                        if (results.errors.length > 0) {
+                            console.log("Parse errors:", results.errors);
+                            errorMessage.textContent = 'Error parsing CSV: ' + results.errors[0].message;
+                            return;
+                        }
+
+                        try {
+                            // Map CSV columns to expected format
+                            restaurantData = results.data.map(row => {
+                                // Debug: Log each row
+                                console.log("Processing row:", row);
+                                
+                                // Create a normalized version of the row with lowercase keys
+                                const normalizedRow = {};
+                                Object.keys(row).forEach(key => {
+                                    normalizedRow[key.toLowerCase().replace(/[^a-z0-9]/g, '')] = row[key];
+                                });
+
+                                return {
+                                    code: row.code || '',
+                                    name: row.name || row.restaurantname || normalizedRow.restaurantname || row.titley || '',
+                                    address: row.address || normalizedRow.address || '',
+                                    price: parseFloat(row.price || normalizedRow.price || 0),
+                                    foodRating: parseFloat(row.foodrating || row.ratingfood || normalizedRow.ratingfood || 0),
+                                    likeDislike: parseFloat(row.likedislike || normalizedRow.likedislike || 0),
+                                    vendorRating: parseFloat(row.vendorrating || row.ratingvendor || normalizedRow.ratingvendor || 0),
+                                    commentCount: parseFloat(row.commentcount || normalizedRow.commentcount || 0),
+                                    score51: parseFloat(row.score51 || normalizedRow.score51 || 0),
+                                    foodCount: parseFloat(row.foodcount || normalizedRow.foodcount || 0),
+                                    lat: parseFloat(row.lat || row.latitude || normalizedRow.latitude || 0),
+                                    lon: parseFloat(row.lon || row.longitude || normalizedRow.longitude || 0),
+                                    link: row.link || normalizedRow.link || '#'
+                                };
+                            }).filter(row => 
+                                !isNaN(row.lat) && 
+                                !isNaN(row.lon) && 
+                                row.lat !== 0 && 
+                                row.lon !== 0
+                            );
+
+                            // Debug: Log processed data
+                            console.log("Processed restaurant data:", restaurantData);
+
+                            if (restaurantData.length === 0) {
+                                errorMessage.textContent = 'No valid restaurant data found in CSV';
+                                return;
+                            }
+
+                            loadingMessage.textContent = `Successfully loaded ${restaurantData.length} restaurants`;
+                            
+                            // // Clear existing markers
+                            // map.eachLayer((layer) => {
+                            //     if (layer instanceof L.Marker) {
+                            //         map.removeLayer(layer);
+                            //     }
+                            // });
+
+                            // // Center map on first restaurant
+                            // if (restaurantData.length > 0) {
+                            //     map.setView([restaurantData[0].lat, restaurantData[0].lon], 13);
+                            // }
+
+                            // // Add restaurant markers to map
+                            // restaurantData.forEach(restaurant => {
+                            //     L.marker([restaurant.lat, restaurant.lon])
+                            //         .bindPopup(`
+                            //             <b>${restaurant.name}</b><br>
+                            //             ${restaurant.address}<br>
+                            //             Rating: ${restaurant.foodRating}
+                            //         `)
+                            //         .addTo(map);
+                            // });
+
+                        } catch (e) {
+                            console.error("Data processing error:", e);
+                            errorMessage.textContent = 'Error processing data: ' + e.message;
+                        }
+                    },
+                    error: function(error) {
+                        console.error("CSV parsing error:", error);
+                        errorMessage.textContent = 'Error parsing CSV: ' + error.message;
+                    }
+                });
+            } catch (error) {
+                console.error("Fetch error:", error);
+                errorMessage.textContent = 'Error loading CSV: ' + error.message;
+            }
+        }
+
+        function calculateDistances() {
+            if (!selectedLat || !selectedLon) {
+                alert('Please select your location on the map first!');
+                return false;
+            }
+
+            if (restaurantData.length === 0) {
+                alert('Please load restaurant data first!');
+                return false;
+            }
+
+            restaurantData.forEach(restaurant => {
+                const distance = Math.sqrt(
+                    Math.pow(restaurant.lat - selectedLat, 2) + 
+                    Math.pow(restaurant.lon - selectedLon, 2)
+                );
+                restaurant.distance = distance;
+            });
+
+            // Normalize distances
+            const distances = restaurantData.map(r => r.distance);
+            const minDist = Math.min(...distances);
+            const maxDist = Math.max(...distances);
+            
+            restaurantData.forEach(restaurant => {
+                restaurant.distance = (restaurant.distance - minDist) / (maxDist - minDist);
+                restaurant.distance = 1 - restaurant.distance; // Invert so closer = higher score
+            });
+
+            return true;
+        }
+
+        function calculateScores() {
+            if (!calculateDistances()) return;
+
+            const weights = {
+                price: parseFloat(document.getElementById('price-weight').value),
+                foodRating: parseFloat(document.getElementById('food-rating-weight').value),
+                likeDislike: parseFloat(document.getElementById('like-dislike-weight').value),
+                vendorRating: parseFloat(document.getElementById('vendor-rating-weight').value),
+                votes: parseFloat(document.getElementById('votes-weight').value),
+                closeness: parseFloat(document.getElementById('closeness-weight').value),
+                score: parseFloat(document.getElementById('score-weight').value),
+                foods: parseFloat(document.getElementById('foods-weight').value)
             };
 
-            const results = restaurantData.map(restaurant => ({
-                ...restaurant,
-                score: 
-                    coefficients.mean_price * restaurant.price +
-                    coefficients.mean_rating_food * restaurant.rating_x +
-                    coefficients.mean_like_dislike * restaurant['like-dislike'] +
-                    coefficients.mean_rating_vendor * restaurant.rating_y +
-                    coefficients.num_rating_vendor * restaurant.commentCount_y +
-                    coefficients.closeness * restaurant.distance +
-                    coefficients.score_5_1 * restaurant['score5-1'] +
-                    coefficients.num_foods * restaurant.count
-            }));
+            // Calculate weighted scores and rank restaurants
+            restaurantData.forEach(restaurant => {
+                restaurant.totalScore = 
+                    weights.price * restaurant.price +
+                    weights.foodRating * restaurant.foodRating +
+                    weights.likeDislike * restaurant.likeDislike +
+                    weights.vendorRating * restaurant.vendorRating +
+                    weights.votes * restaurant.commentCount +
+                    weights.closeness * restaurant.distance +
+                    weights.score * restaurant.score51 +
+                    weights.foods * restaurant.foodCount;
+            });
 
-            results.sort((a, b) => b.score - a.score);
+            // Sort by total score and assign ranks
+            restaurantData.sort((a, b) => b.totalScore - a.totalScore);
+            restaurantData.forEach((restaurant, index) => {
+                restaurant.rank = index + 1;
+            });
 
-            const top100 = results.slice(0, 100);
-            const csv = Papa.unparse(top100);
-            
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', 'top_100_restaurants.csv');
-            link.style.visibility = 'hidden';
+            displayResults();
+        }
+
+        function displayResults() {
+            const tbody = document.querySelector('#results-table tbody');
+            tbody.innerHTML = '';
+
+            restaurantData.forEach(restaurant => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${restaurant.rank}</td>
+                    <td>${restaurant.totalScore.toFixed(2)}</td>
+                    <td>${restaurant.name}</td>
+                    <td>${restaurant.address}</td>
+                    <td>${restaurant.lat.toFixed(4)}, ${restaurant.lon.toFixed(4)}</td>
+                    <td><a href="https://snappfood.ir/restaurant/menu/${restaurant.code}" target="_blank">View</a></td>
+                `;
+            });
+        }
+
+        function exportResults() {
+            if (restaurantData.length === 0) {
+                alert('No data to export! Please load and calculate scores first.');
+                return;
+            }
+
+            const csvContent = "data:text/csv;charset=utf-8," + 
+                "Rank,Score,Restaurant Name,Address,Price,Rating (Food),Like/Dislike," +
+                "Rating (Vendor),Comment Count,Distance,Score 5-1,Food Count,Location,Link\n" +
+                restaurantData.map(r => [
+                    r.rank,
+                    r.totalScore.toFixed(2),
+                    `"${r.titley}"`,
+                    `"${r.address}"`,
+                    r.price,
+                    r.foodRating,
+                    r.likeDislike,
+                    r.vendorRating,
+                    r.commentCount,
+                    r.distance.toFixed(3),
+                    r.score51,
+                    r.foodCount,
+                    `${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}`,
+                    r.link
+                ].join(",")).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "restaurant_scores.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
-        // Load data automatically if URL is present
+        // Normalize a single column of data
+        function normalizeColumn(data, columnName) {
+            const values = data.map(item => parseFloat(item[columnName])).filter(val => !isNaN(val));
+            if (values.length === 0) return data;
+
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            
+            if (max === min) return data;
+
+            return data.map(item => {
+                const value = parseFloat(item[columnName]);
+                if (!isNaN(value)) {
+                    item[columnName] = (value - min) / (max - min);
+                }
+                return item;
+            });
+        }
+
+        // Function to automatically normalize all numeric columns in the data
+        function normalizeData(data) {
+            const columnsToNormalize = [
+                'price', 
+                'foodRating', 
+                'likeDislike', 
+                'vendorRating', 
+                'commentCount', 
+                'score51', 
+                'foodCount'
+            ];
+
+            columnsToNormalize.forEach(column => {
+                data = normalizeColumn(data, column);
+            });
+
+            return data;
+        }
+
+        // Function to validate CSV data
+        function validateCSVData(data) {
+            const requiredColumns = [
+                'name',
+                'address',
+                'price',
+                'foodRating',
+                'likeDislike',
+                'vendorRating',
+                'commentCount',
+                'score51',
+                'foodCount',
+                'lat',
+                'lon'
+            ];
+
+            const missingColumns = requiredColumns.filter(column => {
+                return !data.some(row => 
+                    row.hasOwnProperty(column) || 
+                    row.hasOwnProperty(column.toLowerCase()) ||
+                    row.hasOwnProperty(column.toUpperCase()) ||
+                    row.hasOwnProperty(column.replace(/([A-Z])/g, ' $1').trim())
+                );
+            });
+
+            if (missingColumns.length > 0) {
+                throw new Error(`Missing required columns: ${missingColumns.join(', ')}`);
+            }
+
+            // Validate that numerical columns contain valid numbers
+            const numericalColumns = [
+                'price',
+                'foodRating',
+                'likeDislike',
+                'vendorRating',
+                'commentCount',
+                'score51',
+                'foodCount',
+                'lat',
+                'lon'
+            ];
+
+            data.forEach((row, index) => {
+                numericalColumns.forEach(column => {
+                    const value = parseFloat(row[column]);
+                    if (isNaN(value)) {
+                        throw new Error(`Invalid numerical value in row ${index + 1}, column ${column}`);
+                    }
+                });
+            });
+
+            return true;
+        }
+
+        // Function to handle errors
+        function handleError(error, message = 'An error occurred') {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = `${message}: ${error.message}`;
+            console.error(error);
+        }
+
+        // Initialize map when page loads
         window.onload = function() {
-            const urlInput = document.getElementById('csvUrl');
-            if (urlInput.value.trim()) {
-                loadCSV();
+            try {
+                initMap();
+                
+                // Add event listeners for input validation
+                document.querySelectorAll('input[type="number"]').forEach(input => {
+                    input.addEventListener('input', function() {
+                        if (this.value < 0) {
+                            this.value = 0;
+                        }
+                    });
+                });
+
+                // Add event listener for Enter key in CSV URL input
+                document.getElementById('csv-url').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        loadCSV();
+                    }
+                });
+
+            } catch (error) {
+                handleError(error, 'Error initializing application');
             }
         };
     </script>
