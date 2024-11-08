@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Score Calculator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .coefficients {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .coefficient {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-bottom: 5px;
+        }
+        input {
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .data-source {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .data-source input {
+            flex: 1;
+            min-width: 300px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .results {
+            margin-top: 20px;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        #loadingMessage {
+            display: none;
+            color: #666;
+            margin: 10px 0;
+        }
+        .address {
+            max-width: 300px;
+        }
+        .title {
+            min-width: 150px;
+        }
+        .numeric {
+            text-align: right;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Restaurant Score Calculator</h1>
+    
+    <div class="data-source">
+        <input type="text" id="csvUrl" placeholder="Enter CSV URL" value="https://github.com/MohsenFatemii/Restaurant-Recommender/blob/main/restaurants.csv">
+        <button onclick="loadCSV()">Load Data</button>
+        <div id="loadingMessage">Loading data...</div>
+    </div>
+
+    <div class="coefficients">
+        <div class="coefficient">
+            <label for="mean_price">Weight of Price:</label>
+            <input type="number" id="mean_price" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="mean_rating_food">Weight of Rating of Food:</label>
+            <input type="number" id="mean_rating_food" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="mean_like_dislike">Weight of Like/Dislike of foods:</label>
+            <input type="number" id="mean_like_dislike" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="mean_rating_vendor">Weight of Vendor's Rating:</label>
+            <input type="number" id="mean_rating_vendor" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="num_rating_vendor">Weight of Number of votes:</label>
+            <input type="number" id="num_rating_vendor" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="closeness">Closeness Weight:</label>
+            <input type="number" id="closeness" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="score_5_1">Score 5-1 Weight:</label>
+            <input type="number" id="score_5_1" value="0.0" step="0.05">
+        </div>
+        <div class="coefficient">
+            <label for="num_foods">Num Foods Weight:</label>
+            <input type="number" id="num_foods" value="0.0" step="0.05">
+        </div>
+    </div>
+
+    <button onclick="calculateScores()">Calculate Scores</button>
+    <button onclick="exportToCSV()">Export Results</button>
+
+    <div class="results">
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Score</th>
+                    <th>Restaurant Name</th>
+                    <th>Address</th>
+                    <th>Price</th>
+                    <th>Rating (Food)</th>
+                    <th>Like/Dislike</th>
+                    <th>Rating (Vendor)</th>
+                    <th>Comment Count</th>
+                    <th>Distance</th>
+                    <th>Score 5-1</th>
+                    <th>Food Count</th>
+                    <th>Location</th>
+                    <th>Link</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        let restaurantData = [];
+
+        async function loadCSV() {
+            const urlInput = document.getElementById('csvUrl');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                alert('Please enter a valid CSV URL');
+                return;
+            }
+
+            loadingMessage.style.display = 'block';
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Failed to fetch CSV file');
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        restaurantData = results.data.filter(row => row.code);
+                        loadingMessage.style.display = 'none';
+                        console.log('Data loaded:', restaurantData.length, 'rows');
+                        calculateScores();
+                    },
+                    error: function(error) {
+                        console.error('Error:', error);
+                        loadingMessage.style.display = 'none';
+                        alert('Error parsing CSV file');
+                    }
+                });
+            } catch (error) {
+                console.error('Error:', error);
+                loadingMessage.style.display = 'none';
+                alert('Error loading CSV file: ' + error.message);
+            }
+        }
+
+        function calculateScores() {
+            if (restaurantData.length === 0) {
+                alert('Please load data first');
+                return;
+            }
+
+            const coefficients = {
+                mean_price: parseFloat(document.getElementById('mean_price').value),
+                mean_rating_food: parseFloat(document.getElementById('mean_rating_food').value),
+                mean_like_dislike: parseFloat(document.getElementById('mean_like_dislike').value),
+                mean_rating_vendor: parseFloat(document.getElementById('mean_rating_vendor').value),
+                num_rating_vendor: parseFloat(document.getElementById('num_rating_vendor').value),
+                closeness: parseFloat(document.getElementById('closeness').value),
+                score_5_1: parseFloat(document.getElementById('score_5_1').value),
+                num_foods: parseFloat(document.getElementById('num_foods').value)
+            };
+
+            const results = restaurantData.map(restaurant => ({
+                ...restaurant,
+                score: 
+                    coefficients.mean_price * restaurant.price +
+                    coefficients.mean_rating_food * restaurant.rating_x +
+                    coefficients.mean_like_dislike * restaurant['like-dislike'] +
+                    coefficients.mean_rating_vendor * restaurant.rating_y +
+                    coefficients.num_rating_vendor * restaurant.commentCount_y +
+                    coefficients.closeness * restaurant.distance +
+                    coefficients.score_5_1 * restaurant['score5-1'] +
+                    coefficients.num_foods * restaurant.count
+            }));
+
+            results.sort((a, b) => b.score - a.score);
+
+            const tbody = document.querySelector('#resultsTable tbody');
+            tbody.innerHTML = '';
+
+            results.slice(0, 100).forEach((restaurant, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="numeric">${index + 1}</td>
+                    <td class="numeric">${restaurant.score.toFixed(4)}</td>
+                    <td class="title">${restaurant.title_y}</td>
+                    <td class="address">${restaurant.address}</td>
+                    <td class="numeric">${restaurant.price.toFixed(4)}</td>
+                    <td class="numeric">${restaurant.rating_x.toFixed(4)}</td>
+                    <td class="numeric">${restaurant['like-dislike'].toFixed(4)}</td>
+                    <td class="numeric">${restaurant.rating_y.toFixed(4)}</td>
+                    <td class="numeric">${restaurant.commentCount_y.toFixed(4)}</td>
+                    <td class="numeric">${restaurant.distance.toFixed(4)}</td>
+                    <td class="numeric">${restaurant['score5-1'].toFixed(4)}</td>
+                    <td class="numeric">${restaurant.count}</td>
+                    <td class="numeric">${restaurant.lat}, ${restaurant.lon}</td>
+                    <td><a href="https://snappfood.ir/restaurant/menu/${restaurant.code}/" target="_blank">Menu</a></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function exportToCSV() {
+            if (restaurantData.length === 0) {
+                alert('Please load and calculate scores first');
+                return;
+            }
+
+            const coefficients = {
+                mean_price: parseFloat(document.getElementById('mean_price').value),
+                mean_rating_food: parseFloat(document.getElementById('mean_rating_food').value),
+                mean_like_dislike: parseFloat(document.getElementById('mean_like_dislike').value),
+                mean_rating_vendor: parseFloat(document.getElementById('mean_rating_vendor').value),
+                num_rating_vendor: parseFloat(document.getElementById('num_rating_vendor').value),
+                closeness: parseFloat(document.getElementById('closeness').value),
+                score_5_1: parseFloat(document.getElementById('score_5_1').value),
+                num_foods: parseFloat(document.getElementById('num_foods').value)
+            };
+
+            const results = restaurantData.map(restaurant => ({
+                ...restaurant,
+                score: 
+                    coefficients.mean_price * restaurant.price +
+                    coefficients.mean_rating_food * restaurant.rating_x +
+                    coefficients.mean_like_dislike * restaurant['like-dislike'] +
+                    coefficients.mean_rating_vendor * restaurant.rating_y +
+                    coefficients.num_rating_vendor * restaurant.commentCount_y +
+                    coefficients.closeness * restaurant.distance +
+                    coefficients.score_5_1 * restaurant['score5-1'] +
+                    coefficients.num_foods * restaurant.count
+            }));
+
+            results.sort((a, b) => b.score - a.score);
+
+            const top100 = results.slice(0, 100);
+            const csv = Papa.unparse(top100);
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'top_100_restaurants.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Load data automatically if URL is present
+        window.onload = function() {
+            const urlInput = document.getElementById('csvUrl');
+            if (urlInput.value.trim()) {
+                loadCSV();
+            }
+        };
+    </script>
+</body>
+</html>
