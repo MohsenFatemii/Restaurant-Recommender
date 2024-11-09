@@ -80,6 +80,18 @@
             color: red;
             margin: 10px 0;
         }
+        .locate-button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .locate-button:hover {
+            background: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -88,6 +100,7 @@
 
         <div class="section">
             <h2>Select Your Location</h2>
+            <button class="locate-button" onclick="findMyLocation()">Find My Location</button>
             <div id="map"></div>
             <div class="location-info">
                 <p>Selected Location: <span id="selected-location">None</span></p>
@@ -182,6 +195,13 @@
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
 
+            L.control.locate({
+                position: 'topright',
+                strings: {
+                    title: "Show me where I am"
+                }
+            }).addTo(map);
+
             map.on('click', function(e) {
                 selectedLat = e.latlng.lat;
                 selectedLon = e.latlng.lng;
@@ -189,6 +209,56 @@
                 updateLocationDisplay();
             });
         }
+
+        function findMyLocation() {
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        
+                        // Update selected coordinates
+                        selectedLat = lat;
+                        selectedLon = lon;
+                        
+                        // Create LatLng object for Leaflet
+                        const latlng = L.latLng(lat, lon);
+                        
+                        // Update marker and center map
+                        updateMarker(latlng);
+                        map.setView(latlng, 15);
+                        
+                        // Update location display
+                        updateLocationDisplay();
+                    },
+                    function(error) {
+                        let errorMessage;
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage = "Location access denied by user.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage = "Location information unavailable.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage = "Location request timed out.";
+                                break;
+                            default:
+                                errorMessage = "An unknown error occurred.";
+                        }
+                        alert(errorMessage);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                alert("Geolocation is not supported by your browser.");
+            }
+        }
+
 
         function updateMarker(latlng) {
             if (marker) {
