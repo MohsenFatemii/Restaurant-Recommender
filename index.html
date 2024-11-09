@@ -266,8 +266,8 @@
                                     price: parseFloat(row.price || normalizedRow.price || 0),
                                     foodRating: parseFloat(row.foodrating || row.ratingfood || normalizedRow.ratingfood || 0),
                                     likeDislike: parseFloat(row.likedislike || normalizedRow.likedislike || 0),
-                                    vendorRating: parseFloat(row.vendorrating || row.ratingvendor || normalizedRow.ratingvendor || 0),
-                                    commentCount: parseFloat(row.commentcount || normalizedRow.commentcount || 0),
+                                    vendorRating: parseFloat(row.ratingy || row.vendorrating || row.ratingvendor || normalizedRow.ratingvendor || 0),
+                                    commentCount: parseFloat(row.commentCounty || row.commentcount || normalizedRow.commentcount || 0),
                                     score51: parseFloat(row.score51 || normalizedRow.score51 || 0),
                                     foodCount: parseFloat(row.foodcount || normalizedRow.foodcount || 0),
                                     lat: parseFloat(row.lat || row.latitude || normalizedRow.latitude || 0),
@@ -410,7 +410,7 @@
                     <td>${restaurant.name}</td>
                     <td>${restaurant.address}</td>
                     <td>${restaurant.lat.toFixed(4)}, ${restaurant.lon.toFixed(4)}</td>
-                    <td><a href="https://snappfood.ir/restaurant/menu/${restaurant.name}-r-${restaurant.code}" target="_blank">View</a></td>
+                    <td><a href="https://snappfood.ir/restaurant/menu/${restaurant.code}" target="_blank">View</a></td>
                 `;
             });
         }
