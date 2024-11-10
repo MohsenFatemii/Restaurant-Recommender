@@ -195,19 +195,19 @@
                 attribution: '© OpenStreetMap contributors'
             }).addTo(map);
 
-            L.control.locate({
-                position: 'topright',
-                strings: {
-                    title: "Show me where I am"
-                }
-            }).addTo(map);
-
             map.on('click', function(e) {
                 selectedLat = e.latlng.lat;
                 selectedLon = e.latlng.lng;
                 updateMarker(e.latlng);
                 updateLocationDisplay();
             });
+
+            L.control.locate({
+                position: 'topright',
+                strings: {
+                    title: "Show me where I am"
+                }
+            }).addTo(map);
         }
 
         function findMyLocation() {
