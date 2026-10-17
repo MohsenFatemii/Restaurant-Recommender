@@ -1,649 +1,888 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Restaurant Score Calculator</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Restaurant Recommender</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        #map {
-            height: 400px;
-            width: 100%;
-            margin-bottom: 20px;
+        :root {
+            --bg: #f6f7f9;
+            --card: #ffffff;
+            --text: #1d2330;
+            --muted: #5d6675;
+            --border: #dfe3ea;
+            --soft: #eef1f5;
+            --accent: #0b6bcb;
+            --accent-hover: #0954a0;
+            --accent-soft: #e8f1fb;
+            --error: #b42318;
+            --f-quality: #2e7d32;
+            --f-closeness: #0b6bcb;
+            --f-price: #c77700;
+            --f-popularity: #7b3fb3;
         }
-        .container {
-            max-width: 1200px;
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.45;
+        }
+        .layout {
+            max-width: 1280px;
             margin: 0 auto;
-            padding: 20px;
-        }
-        .section {
-            margin: 20px 0;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .coefficients {
+            padding: 16px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
+            gap: 16px;
+            grid-template-columns: minmax(0, 1fr);
+            align-items: start;
         }
-        .coefficient {
-            padding: 10px;
-            background: #f5f5f5;
-            border-radius: 4px;
+        .main { display: grid; gap: 16px; min-width: 0; }
+        header h1 { font-size: 1.5rem; margin: 0; }
+        header p { margin: 4px 0 0; color: var(--muted); }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            min-width: 0;
         }
-        .results {
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 8px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        th {
-            background-color: #f5f5f5;
-        }
-        .location-info {
-            margin: 10px 0;
-            padding: 10px;
-            background: #e9ecef;
-            border-radius: 4px;
-        }
-        .buttons {
-            margin: 20px 0;
-        }
+        h2 { font-size: 1.05rem; margin: 0 0 10px; }
+        .hint { color: var(--muted); font-size: 0.875rem; margin: 6px 0; }
         button {
-            padding: 8px 16px;
-            margin-right: 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
+            font: inherit;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--accent);
+            background: var(--accent);
+            color: #fff;
             cursor: pointer;
         }
-        button:hover {
-            background: #0056b3;
+        button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        button:disabled { opacity: 0.6; cursor: default; }
+        button.secondary { background: transparent; color: var(--accent); }
+        button.secondary:hover { background: var(--accent-soft); }
+        button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+        /* Location + map */
+        .location-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+        #location-text { color: var(--muted); font-size: 0.9rem; }
+        #location-text.error { color: var(--error); }
+        #map { height: 320px; border-radius: 8px; border: 1px solid var(--border); }
+
+        /* Preferences */
+        .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 24px; }
+        .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+        .slider input { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; }
+        .slider small { grid-column: 1 / -1; color: var(--muted); }
+        .slider output { font-variant-numeric: tabular-nums; color: var(--muted); }
+        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+        details.explain { margin-top: 12px; font-size: 0.875rem; color: var(--muted); }
+        details.explain summary { cursor: pointer; color: var(--accent); }
+        details.explain ul { margin: 6px 0 0; padding-left: 20px; }
+
+        /* Filters */
+        .filter { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; max-width: 420px; }
+        .filter input { grid-column: 1 / -1; width: 100%; }
+        fieldset { border: 0; padding: 0; margin: 14px 0 0; }
+        legend { padding: 0; margin-bottom: 6px; }
+        .tiers { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+        /* Results */
+        .results-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+        .results-head h2 { margin: 0; }
+        .status { margin: 8px 0 10px; color: var(--muted); }
+        .status.error { color: var(--error); }
+        .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--muted); margin-bottom: 10px; }
+        .results { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+        .result {
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr);
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
         }
-        .file-input {
-            margin: 10px 0;
+        .result:hover, .result:focus-visible { border-color: var(--accent); outline: none; }
+        .result.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+        .rank {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            display: grid; place-items: center;
+            font-weight: 600; font-size: 0.85rem;
         }
+        .title-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+        .name { font-weight: 600; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+        a.name:hover { text-decoration: underline; color: var(--accent); }
+        .score { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .score small { font-weight: 400; color: var(--muted); }
+        .address { color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+        .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+        .chip { font-size: 0.8rem; background: var(--soft); border-radius: 999px; padding: 2px 8px; }
+        .chip.warn { background: #fff4e5; color: #8a4b00; }
+        .bar { display: flex; height: 8px; background: var(--soft); border-radius: 4px; overflow: hidden; }
+        .bar span { height: 100%; }
+        #more-btn { margin-top: 12px; width: 100%; }
+
+        /* Data source */
+        details.card summary { cursor: pointer; font-weight: 600; }
+        .url-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
         #csv-url {
-            width: 100%;
-            max-width: 500px;
+            flex: 1 1 240px;
+            min-width: 0;
             padding: 8px;
-            margin-bottom: 10px;
+            font: inherit;
+            border: 1px solid var(--border);
+            border-radius: 6px;
         }
-        .error {
-            color: red;
-            margin: 10px 0;
+
+        /* Map pins */
+        .rank-pin {
+            background: var(--accent);
+            color: #fff;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: grid; place-items: center;
+            font: 600 12px/1 system-ui, sans-serif;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
         }
-        .locate-button {
-            padding: 8px 16px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 10px 0;
+        .rank-pin.active { background: var(--text); }
+        .you-pin {
+            background: #d92d20;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(217, 45, 32, 0.35), 0 1px 3px rgba(0, 0, 0, 0.4);
         }
-        .locate-button:hover {
-            background: #0056b3;
+        .popup-name { font-weight: 600; }
+
+        @media (min-width: 900px) {
+            .layout {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                grid-template-areas: "header header" "main map";
+            }
+            header { grid-area: header; }
+            .main { grid-area: main; }
+            .map-card {
+                grid-area: map;
+                position: sticky;
+                top: 16px;
+                height: calc(100vh - 32px);
+                display: flex;
+                flex-direction: column;
+            }
+            #map { flex: 1; height: auto; min-height: 300px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Restaurant Score Calculator</h1>
+    <div class="layout">
+        <header>
+            <h1>Restaurant Recommender</h1>
+            <p>Find restaurants that fit what you care about: food, distance, price and popularity.</p>
+        </header>
 
-        <div class="section">
-            <h2>Select Your Location</h2>
-            <button class="locate-button" onclick="findMyLocation()">Find My Location</button>
+        <section class="card map-card">
+            <h2>Your location</h2>
+            <div class="location-row">
+                <button type="button" id="locate-btn">Use my location</button>
+                <span id="location-text">Or click the map to set it.</span>
+            </div>
             <div id="map"></div>
-            <div class="location-info">
-                <p>Selected Location: <span id="selected-location">None</span></p>
-            </div>
-        </div>
+        </section>
 
-        <div class="section" id="data-source">
-            <h2>Load Data</h2>
-            <div class="file-input">
-                <input type="text" id="csv-url" placeholder="Enter CSV file URL" value="https://raw.githubusercontent.com/MohsenFatemii/Restaurant-Recommender/refs/heads/main/restaurants.csv">
-                <button onclick="loadCSV()">Load CSV</button>
-            </div>
-            <div id="loadingMessage"></div>
-            <div id="errorMessage" class="error"></div>
-        </div>
+        <main class="main">
+            <section class="card">
+                <h2>What matters to you</h2>
+                <div class="presets" id="presets" role="group" aria-label="Presets"></div>
+                <div class="sliders" id="sliders"></div>
+                <details class="explain">
+                    <summary>How the score works</summary>
+                    <ul>
+                        <li>Each factor is scored 0–1. The score is the slider-weighted average, shown out of 100.</li>
+                        <li><b>Food quality</b> blends food rating, vendor rating and share of 5-star vs 1-star reviews. Ratings with few reviews are pulled toward the city average, and missing ratings count as average instead of zero.</li>
+                        <li><b>Closeness</b> uses real distance and halves every 2 km.</li>
+                        <li><b>Low price</b>, <b>popularity</b> and quality are ranked against all restaurants, so one extreme outlier can't squash everyone else.</li>
+                    </ul>
+                </details>
+            </section>
 
-        <div class="section">
-            <h2>Coefficients</h2>
-            <div class="coefficients">
-                <div class="coefficient">
-                    <label>Weight of Price:</label>
-                    <input type="number" id="price-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Weight of Rating of Food:</label>
-                    <input type="number" id="food-rating-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Weight of Like/Dislike:</label>
-                    <input type="number" id="like-dislike-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Weight of Vendor's Rating:</label>
-                    <input type="number" id="vendor-rating-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Weight of Number of votes:</label>
-                    <input type="number" id="votes-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Closeness Weight:</label>
-                    <input type="number" id="closeness-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Score 5-1 Weight:</label>
-                    <input type="number" id="score-weight" value="0" step="0.1" min="0">
-                </div>
-                <div class="coefficient">
-                    <label>Num Foods Weight:</label>
-                    <input type="number" id="foods-weight" value="0" step="0.1" min="0">
-                </div>
-            </div>
-        </div>
+            <section class="card">
+                <h2>Filters</h2>
+                <label class="filter">
+                    <span>Max distance</span>
+                    <output id="max-km-out"></output>
+                    <input type="range" id="max-km" min="0.5" max="20" step="0.5">
+                </label>
+                <fieldset>
+                    <legend>Price level</legend>
+                    <div class="tiers" id="tiers"></div>
+                </fieldset>
+            </section>
 
-        <div class="buttons">
-            <button onclick="calculateScores()">Calculate Scores</button>
-            <button onclick="exportResults()">Export Results</button>
-        </div>
+            <section class="card">
+                <div class="results-head">
+                    <h2>Results</h2>
+                    <button type="button" class="secondary" id="export-btn" disabled>Export CSV</button>
+                </div>
+                <p class="status" id="status" role="status"></p>
+                <div class="legend" id="legend"></div>
+                <ol class="results" id="results"></ol>
+                <button type="button" class="secondary" id="more-btn" hidden>Show more</button>
+            </section>
 
-        <div class="section">
-            <h2>Results</h2>
-            <div class="results">
-                <table id="results-table">
-                    <thead>
-                        <tr>
-                            <th>Rank</th>
-                            <th>Score</th>
-                            <th>Restaurant Name</th>
-                            <th>Address</th>
-                            <th>Location</th>
-                            <th>Link</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
+            <details class="card" id="data-source">
+                <summary>Data source</summary>
+                <form class="url-row" id="csv-form">
+                    <input type="url" id="csv-url" aria-label="CSV file URL">
+                    <button type="submit">Load CSV</button>
+                </form>
+                <p class="status" id="data-status"></p>
+            </details>
+        </main>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <script>
-        let selectedLat = null;
-        let selectedLon = null;
-        let map;
-        let marker;
-        let restaurantData = [];
+        const DEFAULT_CSV_URL = 'https://raw.githubusercontent.com/MohsenFatemii/Restaurant-Recommender/refs/heads/main/restaurants.csv';
+        const MAP_CENTER = [36.2970, 59.6062]; // Mashhad
+        const PREFS_KEY = 'restaurant-recommender:prefs';
+        const PAGE_SIZE = 20;
+        const CLOSENESS_HALF_LIFE_KM = 2;
+        const QUALITY_MIX = { food: 0.4, vendor: 0.4, stars: 0.2 };
+        const TIER_NAMES = { 1: 'Budget', 2: 'Mid-range', 3: 'Upscale' };
 
-        // Initialize the map
-        function initMap() {
-            map = L.map('map').setView([36.293944, 59.610022], 13); // Default to NYC coordinates
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
+        const FACTORS = [
+            { key: 'quality', label: 'Food quality', hint: 'Ratings, adjusted for review count', color: 'var(--f-quality)' },
+            { key: 'closeness', label: 'Closeness', hint: 'Nearer is better', color: 'var(--f-closeness)' },
+            { key: 'price', label: 'Low price', hint: 'Cheaper is better', color: 'var(--f-price)' },
+            { key: 'popularity', label: 'Popularity', hint: 'Number of reviews and likes', color: 'var(--f-popularity)' }
+        ];
 
-            map.on('click', function(e) {
-                selectedLat = e.latlng.lat;
-                selectedLon = e.latlng.lng;
-                updateMarker(e.latlng);
-                updateLocationDisplay();
+        const PRESETS = [
+            { name: 'Balanced', weights: { quality: 6, closeness: 6, price: 4, popularity: 2 } },
+            { name: 'Cheap & close', weights: { quality: 2, closeness: 8, price: 8, popularity: 0 } },
+            { name: 'Best food', weights: { quality: 10, closeness: 2, price: 0, popularity: 4 } },
+            { name: 'Nearest', weights: { quality: 3, closeness: 10, price: 0, popularity: 1 } }
+        ];
+
+        const state = {
+            restaurants: [],
+            ranked: [],
+            loading: false,
+            loadError: '',
+            lat: null,
+            lon: null,
+            weights: { ...PRESETS[0].weights },
+            maxKm: 5,
+            tiers: new Set([1, 2, 3]),
+            shown: PAGE_SIZE
+        };
+
+        let map, userMarker, radiusCircle, resultsLayer;
+        let markers = [];
+
+        // ---------- Data loading ----------
+
+        function num(value) {
+            const n = parseFloat(value);
+            return Number.isFinite(n) ? n : NaN;
+        }
+
+        function pick(row, ...keys) {
+            for (const key of keys) {
+                if (row[key] !== undefined && row[key] !== '') return row[key];
+            }
+            return undefined;
+        }
+
+        function toRestaurant(row) {
+            return {
+                code: String(pick(row, 'code') ?? '').trim(),
+                name: String(pick(row, 'titley', 'name', 'restaurantname') ?? '').trim(),
+                address: String(pick(row, 'address') ?? '').trim(),
+                // The CSV's price column is already inverted: 1 = cheapest, 0 = most expensive.
+                cheapness: num(pick(row, 'price')),
+                foodRating: num(pick(row, 'ratingx', 'foodrating', 'ratingfood')),
+                vendorRating: num(pick(row, 'ratingy', 'vendorrating', 'ratingvendor')),
+                stars: num(pick(row, 'score51')),
+                likeDislike: num(pick(row, 'likedislike')),
+                reviews: num(pick(row, 'commentcountx', 'commentcount', 'commentcounty')),
+                lat: num(pick(row, 'lat', 'latitude')),
+                lon: num(pick(row, 'lon', 'lng', 'longitude'))
+            };
+        }
+
+        async function loadData(url) {
+            state.loading = true;
+            state.loadError = '';
+            setDataStatus('Loading restaurants…');
+            update();
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const csvText = await response.text();
+
+                // No dynamicTyping: it would turn codes like "097556" into 97556 and break their links.
+                const parsed = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    transformHeader: header => header.toLowerCase().replace(/[^a-z0-9]/g, '')
+                });
+                if (parsed.errors.length) console.warn('CSV rows with problems:', parsed.errors);
+
+                const restaurants = parsed.data
+                    .map(toRestaurant)
+                    .filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lon) && r.lat !== 0 && r.lon !== 0);
+                if (restaurants.length === 0) throw new Error('no rows with valid coordinates');
+
+                deriveFactors(restaurants);
+                state.restaurants = restaurants;
+                setDataStatus(`Loaded ${restaurants.length} restaurants.`);
+            } catch (error) {
+                console.error(error);
+                state.restaurants = [];
+                state.loadError = `Could not load restaurant data (${error.message}).`;
+                setDataStatus(state.loadError, true);
+                document.getElementById('data-source').open = true;
+            } finally {
+                state.loading = false;
+                update();
+            }
+        }
+
+        // ---------- Scoring ----------
+
+        function quantile(values, q) {
+            const sorted = [...values].sort((a, b) => a - b);
+            return sorted[Math.floor(q * (sorted.length - 1))] ?? 0;
+        }
+
+        function mean(values) {
+            return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        }
+
+        // Percentile rank in 0..1 (ties share the average rank), so skewed columns and outliers
+        // don't decide how much a factor matters.
+        function percentiles(values) {
+            const n = values.length;
+            if (n < 2) return values.map(() => 0.5);
+            const order = values.map((_, i) => i).sort((a, b) => values[a] - values[b]);
+            const result = new Array(n);
+            for (let i = 0; i < n;) {
+                let j = i;
+                while (j + 1 < n && values[order[j + 1]] === values[order[i]]) j++;
+                const p = (i + j) / 2 / (n - 1);
+                for (let k = i; k <= j; k++) result[order[k]] = p;
+                i = j + 1;
+            }
+            return result;
+        }
+
+        // Bayesian average: ratings backed by few reviews are pulled toward the mean, and missing
+        // ratings get the mean. The rating columns were min-max scaled before export, so an exact 0
+        // means "no rating" (those rows have few reviews and normal other ratings), not "worst".
+        function bayesian(ratings, counts, prior, zeroIsMissing) {
+            const present = r => Number.isFinite(r) && !(zeroIsMissing && r === 0);
+            const avg = mean(ratings.filter(present));
+            return ratings.map((r, i) => present(r) ? (counts[i] * r + prior * avg) / (counts[i] + prior) : avg);
+        }
+
+        function deriveFactors(restaurants) {
+            const reviews = restaurants.map(r => Number.isFinite(r.reviews) ? r.reviews : 0);
+            const prior = Math.max(1, quantile(reviews, 0.25));
+
+            const food = percentiles(bayesian(restaurants.map(r => r.foodRating), reviews, prior, true));
+            const vendor = percentiles(bayesian(restaurants.map(r => r.vendorRating), reviews, prior, true));
+            const stars = percentiles(bayesian(restaurants.map(r => r.stars), reviews, prior, false));
+            const quality = percentiles(restaurants.map((_, i) =>
+                QUALITY_MIX.food * food[i] + QUALITY_MIX.vendor * vendor[i] + QUALITY_MIX.stars * stars[i]));
+
+            const reviewRank = percentiles(reviews);
+            const likeRank = percentiles(restaurants.map(r => Number.isFinite(r.likeDislike) ? r.likeDislike : 0));
+            const popularity = percentiles(restaurants.map((_, i) => 0.7 * reviewRank[i] + 0.3 * likeRank[i]));
+
+            const knownCheapness = restaurants.map(r => r.cheapness).filter(Number.isFinite);
+            const medianCheapness = quantile(knownCheapness, 0.5);
+            const price = percentiles(restaurants.map(r => Number.isFinite(r.cheapness) ? r.cheapness : medianCheapness));
+
+            restaurants.forEach((r, i) => {
+                r.factors = { quality: quality[i], popularity: popularity[i], price: price[i] };
+                r.tier = price[i] >= 2 / 3 ? 1 : price[i] >= 1 / 3 ? 2 : 3;
+                r.missingFoodRating = !(r.foodRating > 0);
             });
+        }
 
-            L.control.locate({
-                position: 'topright',
-                strings: {
-                    title: "Show me where I am"
+        function haversineKm(lat1, lon1, lat2, lon2) {
+            const rad = Math.PI / 180;
+            const dLat = (lat2 - lat1) * rad;
+            const dLon = (lon2 - lon1) * rad;
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+            return 12742 * Math.asin(Math.sqrt(h));
+        }
+
+        function rank() {
+            const totalWeight = FACTORS.reduce((sum, f) => sum + state.weights[f.key], 0);
+            const ranked = [];
+            for (const r of state.restaurants) {
+                if (!state.tiers.has(r.tier)) continue;
+                const km = haversineKm(state.lat, state.lon, r.lat, r.lon);
+                if (km > state.maxKm) continue;
+
+                const factors = { ...r.factors, closeness: Math.pow(0.5, km / CLOSENESS_HALF_LIFE_KM) };
+                // Points each factor contributes to the 0-100 score.
+                const parts = {};
+                let score = 0;
+                for (const { key } of FACTORS) {
+                    parts[key] = totalWeight ? 100 * state.weights[key] * factors[key] / totalWeight : 0;
+                    score += parts[key];
                 }
-            }).addTo(map);
+                ranked.push({ r, km, factors, parts, score });
+            }
+            ranked.sort((a, b) => b.score - a.score || a.km - b.km);
+            return { ranked, totalWeight };
+        }
+
+        // ---------- Rendering ----------
+
+        function el(tag, className, text) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            if (text !== undefined) node.textContent = text;
+            return node;
+        }
+
+        function chip(text, title, extraClass) {
+            const node = el('span', 'chip' + (extraClass ? ' ' + extraClass : ''), text);
+            if (title) node.title = title;
+            return node;
+        }
+
+        function formatKm(km) {
+            return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+        }
+
+        function snappfoodUrl(r) {
+            return `https://snappfood.ir/restaurant/menu/${encodeURIComponent(r.name)}-r-${encodeURIComponent(r.code)}`;
+        }
+
+        function setStatus(text, isError) {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.classList.toggle('error', !!isError);
+        }
+
+        function setDataStatus(text, isError) {
+            const status = document.getElementById('data-status');
+            status.textContent = text;
+            status.classList.toggle('error', !!isError);
+        }
+
+        function update({ keepPage = false } = {}) {
+            savePrefs();
+            if (!keepPage) state.shown = PAGE_SIZE;
+
+            const list = document.getElementById('results');
+            const moreButton = document.getElementById('more-btn');
+            const exportButton = document.getElementById('export-btn');
+            list.replaceChildren();
+            resultsLayer.clearLayers();
+            markers = [];
+            state.ranked = [];
+            moreButton.hidden = true;
+            exportButton.disabled = true;
+
+            if (state.loading) return setStatus('Loading restaurants…');
+            if (state.loadError) return setStatus(state.loadError, true);
+            if (state.lat === null) return setStatus('Set your location to see recommendations: click the map or use “Use my location”.');
+
+            const { ranked, totalWeight } = rank();
+            state.ranked = ranked;
+            if (ranked.length === 0) {
+                return setStatus(`No restaurants within ${formatKm(state.maxKm)} match your filters. Try a larger distance or more price levels.`);
+            }
+
+            const shown = ranked.slice(0, state.shown);
+            setStatus((totalWeight ? '' : 'All preferences are at 0, so results are sorted by distance. ') +
+                `Showing ${shown.length} of ${ranked.length} restaurants within ${formatKm(state.maxKm)}.`);
+            shown.forEach((item, i) => {
+                list.append(renderResult(item, i));
+                addMarker(item, i);
+            });
+            moreButton.hidden = shown.length >= ranked.length;
+            exportButton.disabled = false;
+        }
+
+        function renderResult(item, i) {
+            const { r } = item;
+            const li = el('li', 'result');
+            li.tabIndex = 0;
+            li.dataset.index = i;
+
+            const name = el(r.code ? 'a' : 'span', 'name', r.name || 'Unnamed restaurant');
+            name.dir = 'auto';
+            if (r.code) {
+                name.href = snappfoodUrl(r);
+                name.target = '_blank';
+                name.rel = 'noopener';
+                name.title = 'Open on Snappfood';
+            }
+            const score = el('span', 'score', String(Math.round(item.score)));
+            score.append(el('small', '', '/100'));
+            const titleRow = el('div', 'title-row');
+            titleRow.append(name, score);
+
+            const address = el('div', 'address', r.address);
+            address.dir = 'auto';
+
+            const qualityPct = Math.round(r.factors.quality * 100);
+            const chips = el('div', 'chips');
+            chips.append(
+                chip(formatKm(item.km), 'Straight-line distance'),
+                chip('$'.repeat(r.tier), TIER_NAMES[r.tier]),
+                chip(`Quality ${qualityPct}/100`, `Better than ${qualityPct}% of restaurants`)
+            );
+            if (Number.isFinite(r.reviews)) chips.append(chip(`${Math.round(r.reviews).toLocaleString('en-US')} reviews`));
+            if (r.missingFoodRating) chips.append(chip('No food rating', 'Scored as average food rating', 'warn'));
+
+            const bar = el('div', 'bar');
+            bar.setAttribute('role', 'img');
+            bar.setAttribute('aria-label', 'Score breakdown: ' +
+                FACTORS.map(f => `${f.label} ${Math.round(item.parts[f.key])}`).join(', '));
+            for (const f of FACTORS) {
+                const segment = el('span');
+                segment.style.width = item.parts[f.key] + '%';
+                segment.style.background = f.color;
+                segment.title = `${f.label}: ${Math.round(item.parts[f.key])} points`;
+                bar.append(segment);
+            }
+
+            const body = el('div');
+            body.append(titleRow, address, chips, bar);
+            li.append(el('div', 'rank', String(i + 1)), body);
+
+            li.addEventListener('click', e => {
+                if (!e.target.closest('a')) focusResult(i, true);
+            });
+            li.addEventListener('keydown', e => {
+                if (e.key === 'Enter' && e.target === li) focusResult(i, true);
+            });
+            return li;
+        }
+
+        function addMarker(item, i) {
+            const { r } = item;
+            const marker = L.marker([r.lat, r.lon], {
+                icon: L.divIcon({ className: 'rank-pin', html: String(i + 1), iconSize: [26, 26] }),
+                title: r.name,
+                riseOnHover: true
+            });
+            const popup = el('div');
+            const popupName = el('div', 'popup-name', r.name);
+            popupName.dir = 'auto';
+            const popupAddress = el('div', '', r.address);
+            popupAddress.dir = 'auto';
+            popup.append(popupName, popupAddress, el('div', '', `${formatKm(item.km)} · ${'$'.repeat(r.tier)} · score ${Math.round(item.score)}`));
+            marker.bindPopup(popup);
+            marker.on('click', () => focusResult(i, false));
+            resultsLayer.addLayer(marker);
+            markers[i] = marker;
+        }
+
+        function focusResult(i, fromList) {
+            document.querySelectorAll('.result.active').forEach(node => node.classList.remove('active'));
+            markers.forEach(m => m.getElement()?.classList.remove('active'));
+
+            const card = document.querySelector(`.result[data-index="${i}"]`);
+            const marker = markers[i];
+            card?.classList.add('active');
+            marker?.getElement()?.classList.add('active');
+
+            if (fromList && marker) {
+                map.setView(marker.getLatLng(), Math.max(map.getZoom(), 15));
+                marker.openPopup();
+                if (window.matchMedia('(max-width: 899px)').matches) {
+                    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } else {
+                card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        // ---------- Location ----------
+
+        function setLocation(lat, lon, { fit = false } = {}) {
+            state.lat = lat;
+            state.lon = lon;
+            if (userMarker) {
+                userMarker.setLatLng([lat, lon]);
+            } else {
+                // A marker (not a circleMarker) so it stays above nearby result pins.
+                userMarker = L.marker([lat, lon], {
+                    icon: L.divIcon({ className: 'you-pin', iconSize: [18, 18] }),
+                    zIndexOffset: 2000,
+                    interactive: false
+                }).addTo(map);
+            }
+            drawRadius(fit);
+            const text = document.getElementById('location-text');
+            text.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)} · click the map to change`;
+            text.classList.remove('error');
+            update();
+        }
+
+        function drawRadius(fit) {
+            if (state.lat === null) return;
+            if (radiusCircle) {
+                radiusCircle.setLatLng([state.lat, state.lon]);
+                radiusCircle.setRadius(state.maxKm * 1000);
+            } else {
+                radiusCircle = L.circle([state.lat, state.lon], {
+                    radius: state.maxKm * 1000, color: '#0b6bcb', weight: 1, fillOpacity: 0.04, interactive: false
+                }).addTo(map);
+            }
+            if (fit) map.fitBounds(radiusCircle.getBounds(), { padding: [16, 16] });
         }
 
         function findMyLocation() {
-            if ("geolocation" in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        
-                        // Update selected coordinates
-                        selectedLat = lat;
-                        selectedLon = lon;
-                        
-                        // Create LatLng object for Leaflet
-                        const latlng = L.latLng(lat, lon);
-                        
-                        // Update marker and center map
-                        updateMarker(latlng);
-                        map.setView(latlng, 15);
-                        
-                        // Update location display
-                        updateLocationDisplay();
-                    },
-                    function(error) {
-                        let errorMessage;
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage = "Location access denied by user.";
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage = "Location information unavailable.";
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage = "Location request timed out.";
-                                break;
-                            default:
-                                errorMessage = "An unknown error occurred.";
-                        }
-                        alert(errorMessage);
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 5000,
-                        maximumAge: 0
-                    }
-                );
-            } else {
-                alert("Geolocation is not supported by your browser.");
-            }
-        }
-
-
-        function updateMarker(latlng) {
-            if (marker) {
-                marker.setLatLng(latlng);
-            } else {
-                marker = L.marker(latlng).addTo(map);
-            }
-        }
-
-        function updateLocationDisplay() {
-            document.getElementById('selected-location').textContent = 
-                `Latitude: ${selectedLat.toFixed(4)}, Longitude: ${selectedLon.toFixed(4)}`;
-        }
-
-        async function loadCSV() {
-            const urlInput = document.getElementById('csv-url');
-            const loadingMessage = document.getElementById('loadingMessage');
-            const errorMessage = document.getElementById('errorMessage');
-            
-            const url = urlInput.value.trim();
-            if (!url) {
-                errorMessage.textContent = 'Please enter a CSV file URL';
+            const button = document.getElementById('locate-btn');
+            const text = document.getElementById('location-text');
+            if (!('geolocation' in navigator)) {
+                text.textContent = 'Your browser can’t share its location. Click the map instead.';
+                text.classList.add('error');
                 return;
             }
-
-            loadingMessage.textContent = 'Loading data...';
-            errorMessage.textContent = '';
-
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Failed to fetch CSV file');
-                
-                const csvText = await response.text();
-                
-                // Debug: Log the first few lines of the CSV
-                console.log("First 500 characters of CSV:", csvText.substring(0, 500));
-
-                Papa.parse(csvText, {
-                    header: true,
-                    skipEmptyLines: true,
-                    delimiter: ',', // Explicitly set delimiter
-                    newline: '\n',  // Explicitly set newline
-                    dynamicTyping: true,
-                    transformHeader: function(header) {
-                        // Normalize header names
-                        return header.toLowerCase()
-                            .replace(/[^a-z0-9]/g, '') // Remove special characters
-                            .trim();
-                    },
-                    complete: function(results) {
-                        console.log("Parsing results:", results);
-                        
-                        if (results.errors.length > 0) {
-                            console.log("Parse errors:", results.errors);
-                            errorMessage.textContent = 'Error parsing CSV: ' + results.errors[0].message;
-                            return;
-                        }
-
-                        try {
-                            // Map CSV columns to expected format
-                            restaurantData = results.data.map(row => {
-                                // Debug: Log each row
-                                console.log("Processing row:", row);
-                                
-                                // Create a normalized version of the row with lowercase keys
-                                const normalizedRow = {};
-                                Object.keys(row).forEach(key => {
-                                    normalizedRow[key.toLowerCase().replace(/[^a-z0-9]/g, '')] = row[key];
-                                });
-
-                                return {
-                                    code: row.code || '',
-                                    name: row.name || row.restaurantname || normalizedRow.restaurantname || row.titley || '',
-                                    address: row.address || normalizedRow.address || '',
-                                    price: parseFloat(row.price || normalizedRow.price || 0),
-                                    foodRating: parseFloat(row.ratingx || row.foodrating || row.ratingfood || normalizedRow.ratingfood || 0),
-                                    likeDislike: parseFloat(row.likedislike || normalizedRow.likedislike || 0),
-                                    vendorRating: parseFloat(row.ratingy || row.vendorrating || row.ratingvendor || normalizedRow.ratingvendor || 0),
-                                    commentCount: parseFloat(row.commentcounty || row.commentcount || normalizedRow.commentcount || 0),
-                                    score51: parseFloat(row.score51 || normalizedRow.score51 || 0),
-                                    foodCount: parseFloat(row.count || row.foodcount || normalizedRow.foodcount || 0),
-                                    lat: parseFloat(row.lat || row.latitude || normalizedRow.latitude || 0),
-                                    lon: parseFloat(row.lon || row.longitude || normalizedRow.longitude || 0),
-                                    link: row.link || normalizedRow.link || '#'
-                                };
-                            }).filter(row => 
-                                !isNaN(row.lat) && 
-                                !isNaN(row.lon) && 
-                                row.lat !== 0 && 
-                                row.lon !== 0
-                            );
-
-                            // Debug: Log processed data
-                            console.log("Processed restaurant data:", restaurantData);
-
-                            if (restaurantData.length === 0) {
-                                errorMessage.textContent = 'No valid restaurant data found in CSV';
-                                return;
-                            }
-
-                            loadingMessage.textContent = `Successfully loaded ${restaurantData.length} restaurants`;
-                            
-                            // // Clear existing markers
-                            // map.eachLayer((layer) => {
-                            //     if (layer instanceof L.Marker) {
-                            //         map.removeLayer(layer);
-                            //     }
-                            // });
-
-                            // // Center map on first restaurant
-                            // if (restaurantData.length > 0) {
-                            //     map.setView([restaurantData[0].lat, restaurantData[0].lon], 13);
-                            // }
-
-                            // // Add restaurant markers to map
-                            // restaurantData.forEach(restaurant => {
-                            //     L.marker([restaurant.lat, restaurant.lon])
-                            //         .bindPopup(`
-                            //             <b>${restaurant.name}</b><br>
-                            //             ${restaurant.address}<br>
-                            //             Rating: ${restaurant.foodRating}
-                            //         `)
-                            //         .addTo(map);
-                            // });
-
-                        } catch (e) {
-                            console.error("Data processing error:", e);
-                            errorMessage.textContent = 'Error processing data: ' + e.message;
-                        }
-                    },
-                    error: function(error) {
-                        console.error("CSV parsing error:", error);
-                        errorMessage.textContent = 'Error parsing CSV: ' + error.message;
-                    }
-                });
-            } catch (error) {
-                console.error("Fetch error:", error);
-                errorMessage.textContent = 'Error loading CSV: ' + error.message;
-            }
-        }
-
-        function calculateDistances() {
-            if (!selectedLat || !selectedLon) {
-                alert('Please select your location on the map first!');
-                return false;
-            }
-
-            if (restaurantData.length === 0) {
-                alert('Please load restaurant data first!');
-                return false;
-            }
-
-            restaurantData.forEach(restaurant => {
-                const distance = Math.sqrt(
-                    Math.pow(restaurant.lat - selectedLat, 2) + 
-                    Math.pow(restaurant.lon - selectedLon, 2)
-                );
-                restaurant.distance = distance;
-            });
-
-            // Normalize distances
-            const distances = restaurantData.map(r => r.distance);
-            const minDist = Math.min(...distances);
-            const maxDist = Math.max(...distances);
-            
-            restaurantData.forEach(restaurant => {
-                restaurant.distance = (restaurant.distance - minDist) / (maxDist - minDist);
-                restaurant.distance = 1 - restaurant.distance; // Invert so closer = higher score
-            });
-
-            return true;
-        }
-
-        function calculateScores() {
-            if (!calculateDistances()) return;
-
-            const weights = {
-                price: parseFloat(document.getElementById('price-weight').value),
-                foodRating: parseFloat(document.getElementById('food-rating-weight').value),
-                likeDislike: parseFloat(document.getElementById('like-dislike-weight').value),
-                vendorRating: parseFloat(document.getElementById('vendor-rating-weight').value),
-                votes: parseFloat(document.getElementById('votes-weight').value),
-                closeness: parseFloat(document.getElementById('closeness-weight').value),
-                score: parseFloat(document.getElementById('score-weight').value),
-                foods: parseFloat(document.getElementById('foods-weight').value)
+            button.disabled = true;
+            button.textContent = 'Locating…';
+            const done = () => {
+                button.disabled = false;
+                button.textContent = 'Use my location';
             };
-
-            // Calculate weighted scores and rank restaurants
-            restaurantData.forEach(restaurant => {
-                restaurant.totalScore = 
-                    weights.price * restaurant.price +
-                    weights.foodRating * restaurant.foodRating +
-                    weights.likeDislike * restaurant.likeDislike +
-                    weights.vendorRating * restaurant.vendorRating +
-                    weights.votes * restaurant.commentCount +
-                    weights.closeness * restaurant.distance +
-                    weights.score * restaurant.score51 +
-                    weights.foods * restaurant.foodCount;
-            });
-
-            // Sort by total score and assign ranks
-            restaurantData.sort((a, b) => b.totalScore - a.totalScore);
-            restaurantData.forEach((restaurant, index) => {
-                restaurant.rank = index + 1;
-            });
-
-            displayResults();
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    done();
+                    setLocation(position.coords.latitude, position.coords.longitude, { fit: true });
+                },
+                error => {
+                    done();
+                    const messages = {
+                        [error.PERMISSION_DENIED]: 'Location permission was denied.',
+                        [error.POSITION_UNAVAILABLE]: 'Your location is unavailable.',
+                        [error.TIMEOUT]: 'Finding your location took too long.'
+                    };
+                    text.textContent = (messages[error.code] || 'Could not get your location.') + ' Click the map instead.';
+                    text.classList.add('error');
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+            );
         }
 
-        function displayResults() {
-            const tbody = document.querySelector('#results-table tbody');
-            tbody.innerHTML = '';
+        // ---------- Export ----------
 
-            restaurantData.forEach(restaurant => {
-                const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>${restaurant.rank}</td>
-                    <td>${restaurant.totalScore.toFixed(2)}</td>
-                    <td>${restaurant.name}</td>
-                    <td>${restaurant.address}</td>
-                    <td>${restaurant.lat.toFixed(4)}, ${restaurant.lon.toFixed(4)}</td>
-                    <td><a href="https://snappfood.ir/restaurant/menu/${restaurant.name}-r-${restaurant.code}" target="_blank">View</a></td>
-                `;
-            });
+        function csvField(value) {
+            const s = value === undefined || value === null ? '' : String(value);
+            return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
         }
 
         function exportResults() {
-            if (restaurantData.length === 0) {
-                alert('No data to export! Please load and calculate scores first.');
-                return;
-            }
-
-            const csvContent = "data:text/csv;charset=utf-8," + 
-                "Rank,Score,Restaurant Name,Address,Price,Rating (Food),Like/Dislike," +
-                "Rating (Vendor),Comment Count,Distance,Score 5-1,Food Count,Location,Link\n" +
-                restaurantData.map(r => [
-                    r.rank,
-                    r.totalScore.toFixed(2),
-                    `"${r.titley}"`,
-                    `"${r.address}"`,
-                    r.price,
-                    r.foodRating,
-                    r.likeDislike,
-                    r.vendorRating,
-                    r.commentCount,
-                    r.distance.toFixed(3),
-                    r.score51,
-                    r.foodCount,
-                    `${r.lat.toFixed(4)}, ${r.lon.toFixed(4)}`,
-                    r.link
-                ].join(",")).join("\n");
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "restaurant_scores.csv");
+            if (state.ranked.length === 0) return;
+            const header = ['Rank', 'Score', 'Restaurant Name', 'Address', 'Distance (km)', 'Price Level',
+                'Quality', 'Closeness', 'Low Price', 'Popularity', 'Reviews', 'Latitude', 'Longitude', 'Link'];
+            const rows = state.ranked.map((item, i) => {
+                const { r, factors } = item;
+                return [
+                    i + 1,
+                    item.score.toFixed(1),
+                    r.name,
+                    r.address,
+                    item.km.toFixed(2),
+                    '$'.repeat(r.tier),
+                    factors.quality.toFixed(3),
+                    factors.closeness.toFixed(3),
+                    factors.price.toFixed(3),
+                    factors.popularity.toFixed(3),
+                    Number.isFinite(r.reviews) ? r.reviews : '',
+                    r.lat,
+                    r.lon,
+                    r.code ? snappfoodUrl(r) : ''
+                ];
+            });
+            const csv = [header, ...rows].map(row => row.map(csvField).join(',')).join('\r\n');
+            // The BOM makes Excel read the file as UTF-8 so Persian text displays correctly.
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'restaurant_scores.csv';
             document.body.appendChild(link);
             link.click();
-            document.body.removeChild(link);
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 0);
         }
 
-        // Normalize a single column of data
-        function normalizeColumn(data, columnName) {
-            const values = data.map(item => parseFloat(item[columnName])).filter(val => !isNaN(val));
-            if (values.length === 0) return data;
+        // ---------- Preferences ----------
 
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            
-            if (max === min) return data;
-
-            return data.map(item => {
-                const value = parseFloat(item[columnName]);
-                if (!isNaN(value)) {
-                    item[columnName] = (value - min) / (max - min);
-                }
-                return item;
-            });
-        }
-
-        // Function to automatically normalize all numeric columns in the data
-        function normalizeData(data) {
-            const columnsToNormalize = [
-                'price', 
-                'foodRating', 
-                'likeDislike', 
-                'vendorRating', 
-                'commentCount', 
-                'score51', 
-                'foodCount'
-            ];
-
-            columnsToNormalize.forEach(column => {
-                data = normalizeColumn(data, column);
-            });
-
-            return data;
-        }
-
-        // Function to validate CSV data
-        function validateCSVData(data) {
-            const requiredColumns = [
-                'name',
-                'address',
-                'price',
-                'foodRating',
-                'likeDislike',
-                'vendorRating',
-                'commentCount',
-                'score51',
-                'foodCount',
-                'lat',
-                'lon'
-            ];
-
-            const missingColumns = requiredColumns.filter(column => {
-                return !data.some(row => 
-                    row.hasOwnProperty(column) || 
-                    row.hasOwnProperty(column.toLowerCase()) ||
-                    row.hasOwnProperty(column.toUpperCase()) ||
-                    row.hasOwnProperty(column.replace(/([A-Z])/g, ' $1').trim())
-                );
-            });
-
-            if (missingColumns.length > 0) {
-                throw new Error(`Missing required columns: ${missingColumns.join(', ')}`);
-            }
-
-            // Validate that numerical columns contain valid numbers
-            const numericalColumns = [
-                'price',
-                'foodRating',
-                'likeDislike',
-                'vendorRating',
-                'commentCount',
-                'score51',
-                'foodCount',
-                'lat',
-                'lon'
-            ];
-
-            data.forEach((row, index) => {
-                numericalColumns.forEach(column => {
-                    const value = parseFloat(row[column]);
-                    if (isNaN(value)) {
-                        throw new Error(`Invalid numerical value in row ${index + 1}, column ${column}`);
-                    }
-                });
-            });
-
-            return true;
-        }
-
-        // Function to handle errors
-        function handleError(error, message = 'An error occurred') {
-            const errorMessage = document.getElementById('errorMessage');
-            errorMessage.textContent = `${message}: ${error.message}`;
-            console.error(error);
-        }
-
-        // Initialize map when page loads
-        window.onload = function() {
+        function savePrefs() {
             try {
-                initMap();
-                
-                // Add event listeners for input validation
-                document.querySelectorAll('input[type="number"]').forEach(input => {
-                    input.addEventListener('input', function() {
-                        if (this.value < 0) {
-                            this.value = 0;
-                        }
-                    });
-                });
-
-                // Add event listener for Enter key in CSV URL input
-                document.getElementById('csv-url').addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        loadCSV();
-                    }
-                });
-
-            } catch (error) {
-                handleError(error, 'Error initializing application');
+                localStorage.setItem(PREFS_KEY, JSON.stringify({
+                    weights: state.weights,
+                    maxKm: state.maxKm,
+                    tiers: [...state.tiers],
+                    lat: state.lat,
+                    lon: state.lon
+                }));
+            } catch (e) {
+                // Storage can be unavailable (private mode, blocked site data); preferences just won't persist.
             }
-        };
+        }
+
+        function loadPrefs() {
+            try {
+                const prefs = JSON.parse(localStorage.getItem(PREFS_KEY));
+                if (!prefs) return;
+                for (const f of FACTORS) {
+                    if (Number.isFinite(prefs.weights?.[f.key])) state.weights[f.key] = prefs.weights[f.key];
+                }
+                if (Number.isFinite(prefs.maxKm)) state.maxKm = prefs.maxKm;
+                if (Array.isArray(prefs.tiers)) state.tiers = new Set(prefs.tiers.filter(t => TIER_NAMES[t]));
+                if (Number.isFinite(prefs.lat) && Number.isFinite(prefs.lon)) {
+                    state.lat = prefs.lat;
+                    state.lon = prefs.lon;
+                }
+            } catch (e) {
+                // Ignore unreadable or missing preferences.
+            }
+        }
+
+        function syncPresetButtons() {
+            document.querySelectorAll('#presets button').forEach((button, i) => {
+                const matches = FACTORS.every(f => PRESETS[i].weights[f.key] === state.weights[f.key]);
+                button.setAttribute('aria-pressed', String(matches));
+            });
+        }
+
+        function buildControls() {
+            const presets = document.getElementById('presets');
+            const sliders = document.getElementById('sliders');
+            const legend = document.getElementById('legend');
+
+            PRESETS.forEach(preset => {
+                const button = el('button', 'secondary', preset.name);
+                button.type = 'button';
+                button.addEventListener('click', () => {
+                    Object.assign(state.weights, preset.weights);
+                    syncSliders();
+                    update();
+                });
+                presets.append(button);
+            });
+
+            for (const f of FACTORS) {
+                const label = el('label', 'slider');
+                const title = el('span');
+                const dot = el('span', 'dot');
+                dot.style.background = f.color;
+                title.append(dot, f.label);
+                const output = el('output');
+                output.id = `w-${f.key}-out`;
+                const input = el('input');
+                input.type = 'range';
+                input.id = `w-${f.key}`;
+                input.min = 0;
+                input.max = 10;
+                input.step = 1;
+                input.addEventListener('input', () => {
+                    state.weights[f.key] = Number(input.value);
+                    syncSliders();
+                    update();
+                });
+                label.append(title, output, input, el('small', '', f.hint));
+                sliders.append(label);
+
+                const legendItem = el('span');
+                const legendDot = el('span', 'dot');
+                legendDot.style.background = f.color;
+                legendItem.append(legendDot, f.label);
+                legend.append(legendItem);
+            }
+
+            const tiers = document.getElementById('tiers');
+            for (const [tier, tierName] of Object.entries(TIER_NAMES)) {
+                const label = el('label');
+                const box = el('input');
+                box.type = 'checkbox';
+                box.checked = state.tiers.has(Number(tier));
+                box.addEventListener('change', () => {
+                    if (box.checked) state.tiers.add(Number(tier));
+                    else state.tiers.delete(Number(tier));
+                    update();
+                });
+                label.append(box, ` ${'$'.repeat(tier)} ${tierName}`);
+                tiers.append(label);
+            }
+
+            const maxKm = document.getElementById('max-km');
+            maxKm.value = state.maxKm;
+            document.getElementById('max-km-out').textContent = formatKm(state.maxKm);
+            maxKm.addEventListener('input', () => {
+                state.maxKm = Number(maxKm.value);
+                document.getElementById('max-km-out').textContent = formatKm(state.maxKm);
+                drawRadius(false);
+                update();
+            });
+            maxKm.addEventListener('change', () => drawRadius(true));
+
+            syncSliders();
+        }
+
+        function syncSliders() {
+            for (const f of FACTORS) {
+                document.getElementById(`w-${f.key}`).value = state.weights[f.key];
+                document.getElementById(`w-${f.key}-out`).textContent = state.weights[f.key];
+            }
+            syncPresetButtons();
+        }
+
+        // ---------- Startup ----------
+
+        function initMap() {
+            map = L.map('map').setView(MAP_CENTER, 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            resultsLayer = L.layerGroup().addTo(map);
+            map.on('click', e => setLocation(e.latlng.lat, e.latlng.lng));
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadPrefs();
+            initMap();
+            buildControls();
+
+            document.getElementById('locate-btn').addEventListener('click', findMyLocation);
+            document.getElementById('export-btn').addEventListener('click', exportResults);
+            document.getElementById('more-btn').addEventListener('click', () => {
+                state.shown += PAGE_SIZE;
+                update({ keepPage: true });
+            });
+
+            const csvUrl = document.getElementById('csv-url');
+            csvUrl.value = DEFAULT_CSV_URL;
+            document.getElementById('csv-form').addEventListener('submit', e => {
+                e.preventDefault();
+                const url = csvUrl.value.trim();
+                if (url) loadData(url);
+            });
+
+            loadData(DEFAULT_CSV_URL);
+            if (state.lat !== null) setLocation(state.lat, state.lon, { fit: true });
+        });
     </script>
 </body>
 </html>
